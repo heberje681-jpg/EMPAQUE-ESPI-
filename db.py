@@ -43,7 +43,7 @@ def init_db():
     with _conn() as c:
         c.execute("""
         CREATE TABLE IF NOT EXISTS productores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             nombre TEXT NOT NULL,
             lote INTEGER,
             telefono TEXT,
@@ -52,7 +52,7 @@ def init_db():
         )""")
         c.execute("""
         CREATE TABLE IF NOT EXISTS pallets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             numero INTEGER NOT NULL,
             productor_id INTEGER REFERENCES productores(id),
             variedad TEXT,
@@ -67,7 +67,7 @@ def init_db():
         )""")
         c.execute("""
         CREATE TABLE IF NOT EXISTS embarques (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             fecha TEXT,
             chofer TEXT,
             telefono_chofer TEXT,
@@ -79,7 +79,7 @@ def init_db():
         )""")
         c.execute("""
         CREATE TABLE IF NOT EXISTS remisiones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             productor_id INTEGER REFERENCES productores(id),
             fecha TEXT,
             huerta TEXT,
@@ -280,3 +280,61 @@ def listar_remisiones(productor_id=None):
 
 
 init_db()
+
+
+# ---------------------------------------------------------------------------
+# Respaldo / restauración manual (Excel) — mientras no haya una base en la
+# nube, esto es lo que protege los datos de un reinicio de la app.
+# ---------------------------------------------------------------------------
+
+_TABLAS_RESPALDO = ["productores", "embarques", "pallets", "remisiones"]
+
+
+def exportar_backup(path):
+    """Guarda todas las tablas en un Excel (una hoja por tabla), tal cual,
+    para poder restaurarlas después con importar_backup()."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    with _conn() as c:
+        for tabla in _TABLAS_RESPALDO:
+            filas = [dict(r) for r in c.execute(f"SELECT * FROM {tabla}")]
+            ws = wb.create_sheet(tabla)
+            if filas:
+                columnas = list(filas[0].keys())
+                ws.append(columnas)
+                for f in filas:
+                    ws.append([f[col] for col in columnas])
+            else:
+                # conservar el encabezado aunque la tabla esté vacía
+                cols = [d[1] for d in c.execute(f"PRAGMA table_info({tabla})")]
+                ws.append(cols)
+    wb.save(path)
+
+
+def importar_backup(path):
+    """Reemplaza el contenido actual de las tablas con lo que traiga el
+    Excel de respaldo (mismo formato que genera exportar_backup)."""
+    import openpyxl
+    wb = openpyxl.load_workbook(path, data_only=True)
+    with _conn() as c:
+        c.execute("PRAGMA foreign_keys=OFF")
+        # borrar en orden hijo -> padre
+        for tabla in ["pallets", "remisiones", "embarques", "productores"]:
+            c.execute(f"DELETE FROM {tabla}")
+        # insertar en orden padre -> hijo
+        for tabla in _TABLAS_RESPALDO:
+            if tabla not in wb.sheetnames:
+                continue
+            ws = wb[tabla]
+            filas = list(ws.iter_rows(values_only=True))
+            if not filas:
+                continue
+            headers = filas[0]
+            placeholders = ", ".join("?" for _ in headers)
+            cols = ", ".join(headers)
+            for row in filas[1:]:
+                if all(v is None for v in row):
+                    continue
+                c.execute(f"INSERT INTO {tabla} ({cols}) VALUES ({placeholders})", row)
+        c.execute("PRAGMA foreign_keys=ON")
