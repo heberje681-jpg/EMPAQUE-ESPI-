@@ -28,10 +28,18 @@ desplegada— ven y editan los mismos datos, en tiempo real.
 **Importante sobre esta base de datos:** vive en un archivo `espi.db` junto
 al código. Si se despliega en Streamlit Community Cloud (gratis), ese
 archivo se puede borrar cuando la app se reinicia por inactividad o al subir
-un cambio de código — bien para probar, pero antes de usarlo con datos
-reales de temporada conviene migrar a una base en la nube persistente (ej.
-Supabase, tiene capa gratuita). El acceso a datos está aislado en `db.py`,
-así que ese cambio no debería tocar el resto de la app.
+un cambio de código.
+
+Por eso el módulo trae un panel de **"💾 Respaldo"** arriba de todo (se abre
+al hacer clic): descarga un Excel con todo lo capturado (productores,
+pallets, embarques) cuando quieras, y si un día abres la app y ves todo
+vacío, sube ahí el último respaldo para restaurarlo completo — incluyendo a
+qué embarque va cada pallet. Conviene bajar un respaldo seguido (ej. al
+terminar cada turno) para no perder trabajo. Cuando quieran una solución que
+no dependa de acordarse de bajar el respaldo, la alternativa es migrar a una
+base en la nube persistente (ej. Supabase) — el acceso a datos está aislado
+en `db.py` justo para que ese cambio no obligue a rehacer el resto de la
+app.
 
 ## 📝 Captura de monitoreos
 
@@ -115,4 +123,3 @@ streamlit run app.py
 - El umbral de similitud de nombres de productor está en `core.py`
   (`PRODUCTOR_MATCH_THRESHOLD = 0.45`) — si ves cruces raros entre
   productores con nombres parecidos, se puede subir ese número.
-
