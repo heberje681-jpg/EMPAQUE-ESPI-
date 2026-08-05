@@ -1,4 +1,6 @@
 from datetime import date
+import tempfile
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -12,6 +14,32 @@ def render():
         "Base de datos compartida en tiempo real: todos los que entren aquí ven "
         "los mismos pallets y embarques, se actualiza al instante para todos."
     )
+
+    with st.expander("💾 Respaldo (por si la app se reinicia y se borran los datos)"):
+        st.caption(
+            "Esta app no tiene una base de datos permanente todavía — si se reinicia "
+            "(por inactividad o al subir un cambio de código) puede perder lo capturado. "
+            "Descarga un respaldo seguido, y si un día abres la app y la ves vacía, "
+            "sube aquí el último respaldo para recuperar todo."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "respaldo_espi.xlsx"
+                db.exportar_backup(str(out))
+                st.download_button("⬇️ Descargar respaldo ahora", data=out.read_bytes(),
+                                    file_name="respaldo_espi.xlsx", use_container_width=True)
+        with c2:
+            resp = st.file_uploader("Subir un respaldo para restaurar", type=["xlsx"], key="resp_upl")
+            if resp is not None:
+                st.warning("Esto REEMPLAZA todos los datos actuales con los del respaldo.")
+                if st.button("Confirmar restauración", use_container_width=True):
+                    with tempfile.TemporaryDirectory() as tmp:
+                        p = Path(tmp) / "respaldo.xlsx"
+                        p.write_bytes(resp.getvalue())
+                        db.importar_backup(str(p))
+                    st.success("Datos restaurados.")
+                    st.rerun()
 
     sub = st.radio("Sección", ["👤 Productores", "🧊 Pallets", "🚚 Embarques"],
                     horizontal=True, label_visibility="collapsed")
