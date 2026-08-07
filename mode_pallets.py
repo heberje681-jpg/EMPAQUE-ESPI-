@@ -202,10 +202,14 @@ def _render_embarques():
         placas = c4.text_input("Placas")
         destino = c5.text_input("Destino (ej. Nogales, Tamaulipas)")
         contacto_llegada = c6.text_input("Contacto en destino")
-        notas = st.text_input("Notas")
+        c7, c8 = st.columns(2)
+        telefono_cliente = c7.text_input(
+            "WhatsApp del cliente/destino (con código de país, ej. 5216681234567)",
+            help="Para poder mandarle el aviso de embarque por WhatsApp. Puedes dejarlo vacío y agregarlo después.")
+        notas = c8.text_input("Notas")
         if st.form_submit_button("Crear embarque"):
             eid = db.crear_embarque(str(fecha), chofer, telefono_chofer, placas, destino,
-                                     contacto_llegada, notas)
+                                     contacto_llegada, telefono_cliente, notas)
             st.session_state["embarque_activo"] = eid
             st.success("Embarque creado.")
             st.rerun()
@@ -241,6 +245,34 @@ def _render_embarques():
                 db.actualizar_pallet(p["id"], estado=nuevo_estado)
         st.success("Estado actualizado.")
         st.rerun()
+
+    st.divider()
+    st.subheader("📲 Aviso de embarque por WhatsApp")
+    st.caption(
+        "Genera el mensaje y el link de WhatsApp ya listos — solo se abre WhatsApp con el "
+        "mensaje escrito, tú le das 'Enviar'. No se manda nada solo ni necesita ninguna cuenta especial."
+    )
+    telefono_actual = e.get("telefono_cliente") or ""
+    nuevo_telefono = st.text_input("WhatsApp del cliente/destino", value=telefono_actual, key="tel_cliente_edit")
+    if nuevo_telefono != telefono_actual and st.button("Guardar teléfono"):
+        db.actualizar_embarque(eid, telefono_cliente=nuevo_telefono)
+        st.rerun()
+
+    link, mensaje = db.link_aviso_whatsapp(eid)
+    st.text_area("Mensaje que se va a enviar (puedes editarlo antes de mandarlo)", value=mensaje, height=140,
+                 key="mensaje_preview", disabled=True)
+    if not telefono_actual.strip():
+        st.info("Agrega el WhatsApp del cliente arriba para que el link abra directo la conversación "
+                 "(si lo dejas vacío, igual puedes abrir el link y elegir el contacto a mano).")
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        st.link_button("Abrir en WhatsApp", link, use_container_width=True)
+    with c2:
+        if e.get("aviso_enviado"):
+            st.success("Ya se marcó como enviado para este embarque.")
+        elif st.button("Marcar aviso como enviado"):
+            db.actualizar_embarque(eid, aviso_enviado=1)
+            st.rerun()
 
     st.divider()
     st.subheader("Pallets en este embarque")
