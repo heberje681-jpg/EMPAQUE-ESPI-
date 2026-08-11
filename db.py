@@ -74,9 +74,23 @@ def init_db():
             placas TEXT,
             destino TEXT,
             contacto_llegada TEXT,
+            telefono_cliente TEXT,
             estado TEXT DEFAULT 'ARMANDO',
+            aviso_enviado INTEGER DEFAULT 0,
+            confirmacion_llegada INTEGER DEFAULT 0,
+            fecha_llegada TEXT,
             notas TEXT
         )""")
+        # migración simple para bases ya existentes creadas antes de agregar estas columnas
+        cols_existentes = {row[1] for row in c.execute("PRAGMA table_info(embarques)")}
+        if "telefono_cliente" not in cols_existentes:
+            c.execute("ALTER TABLE embarques ADD COLUMN telefono_cliente TEXT")
+        if "aviso_enviado" not in cols_existentes:
+            c.execute("ALTER TABLE embarques ADD COLUMN aviso_enviado INTEGER DEFAULT 0")
+        if "confirmacion_llegada" not in cols_existentes:
+            c.execute("ALTER TABLE embarques ADD COLUMN confirmacion_llegada INTEGER DEFAULT 0")
+        if "fecha_llegada" not in cols_existentes:
+            c.execute("ALTER TABLE embarques ADD COLUMN fecha_llegada TEXT")
         c.execute("""
         CREATE TABLE IF NOT EXISTS remisiones (
             id INTEGER PRIMARY KEY,
@@ -205,15 +219,50 @@ def armar_pallet(pids, numero_resultante, productor_id, variedad, calibre):
 # ---------------------------------------------------------------------------
 
 def crear_embarque(fecha, chofer="", telefono_chofer="", placas="", destino="",
-                    contacto_llegada="", notas=""):
+                    contacto_llegada="", telefono_cliente="", notas=""):
     with _conn() as c:
         cur = c.execute(
             """INSERT INTO embarques (fecha, chofer, telefono_chofer, placas, destino,
-                                       contacto_llegada, estado, notas)
-               VALUES (?,?,?,?,?,?,?,?)""",
+                                       contacto_llegada, telefono_cliente, estado, notas)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (fecha, chofer, telefono_chofer, placas, destino, contacto_llegada,
-             ESTADOS_EMBARQUE[0], notas))
+             telefono_cliente, ESTADOS_EMBARQUE[0], notas))
         return cur.lastrowid
+
+
+def link_aviso_whatsapp(embarque_id):
+    """Arma el link de wa.me con el mensaje de aviso de embarque ya redactado,
+    listo para abrir y solo darle 'Enviar' — no manda nada automáticamente,
+    no necesita ninguna cuenta ni API de WhatsApp."""
+    import urllib.parse
+    e = embarque(embarque_id)
+    if not e:
+        return None
+    pallets = listar_pallets(embarque_id=embarque_id)
+    total_cajas = sum(p["cajas"] or 0 for p in pallets)
+    productores = sorted({p["productor_nombre"] for p in pallets if p["productor_nombre"]})
+
+    mensaje = (
+        f"Hola, le informamos que el camión con placas {e['placas'] or 's/d'}, "
+        f"conducido por {e['chofer'] or 's/d'}, acaba de salir con destino a "
+        f"{e['destino'] or 's/d'}.\n"
+        f"Lleva {len(pallets)} pallets ({total_cajas} cajas)"
+        + (f" de: {', '.join(productores)}." if productores else ".") +
+        f"\nFecha de salida: {e['fecha'] or 's/d'}.\n"
+        f"Cualquier duda, contactar al chofer: {e['telefono_chofer'] or 's/d'}."
+    )
+    telefono = (e["telefono_cliente"] or "").strip()
+    telefono_limpio = "".join(ch for ch in telefono if ch.isdigit())
+    base = f"https://wa.me/{telefono_limpio}" if telefono_limpio else "https://wa.me/"
+    return f"{base}?text={urllib.parse.quote(mensaje)}", mensaje
+
+
+def confirmar_llegada(embarque_id):
+    """Registra que el empaque confirmó la llegada del embarque a su destino."""
+    with _conn() as c:
+        c.execute(
+            "UPDATE embarques SET confirmacion_llegada=1, fecha_llegada=? WHERE id=?",
+            (datetime.now().isoformat(timespec="seconds"), embarque_id))
 
 
 def listar_embarques():
