@@ -41,12 +41,10 @@ def render():
                     st.success("Datos restaurados.")
                     st.rerun()
 
-    sub = st.radio("Sección", ["📊 Tablero", "👤 Productores", "🧊 Pallets", "🚚 Embarques"],
+    sub = st.radio("Sección", ["👤 Productores", "🧊 Pallets", "🚚 Embarques"],
                     horizontal=True, label_visibility="collapsed")
 
-    if sub == "📊 Tablero":
-        _render_tablero()
-    elif sub == "👤 Productores":
+    if sub == "👤 Productores":
         _render_productores()
     elif sub == "🧊 Pallets":
         _render_pallets()
@@ -55,11 +53,18 @@ def render():
 
 
 # ---------------------------------------------------------------------------
-# Tablero (dashboard de cuarto frío en tiempo real)
+# Tablero (dashboard de cuarto frío en tiempo real) — se llama directo desde
+# app.py como su propio modo en el menú lateral, no vive dentro de este render()
 # ---------------------------------------------------------------------------
 
-def _render_tablero():
-    st.subheader("🧊 Tablero de cuarto frío (tiempo real)")
+def render_tablero():
+    st.title("📊 Tablero — ESPI")
+    st.caption(
+        "Vista general en tiempo real. Los datos se capturan en "
+        "'🚚 Pallets y embarques' — ahí también está el respaldo manual "
+        "(💾) por si la app se reinicia."
+    )
+    st.subheader("🧊 Cuarto frío")
     todos_activos = db.listar_pallets()
 
     conteo_estado = {estado: 0 for estado in db.ESTADOS_PALLET}
