@@ -6,12 +6,15 @@ with st.sidebar:
     st.header("Modo")
     modo = st.radio(
         "¿Qué quieres hacer?",
-        ["🚚 Pallets y embarques", "📝 Captura de monitoreos", "📂 Reconciliar Excel existente"],
+        ["📊 Tablero", "🚚 Pallets y embarques", "📝 Captura de monitoreos", "📂 Reconciliar Excel existente"],
         label_visibility="collapsed",
     )
     st.divider()
 
-if modo == "🚚 Pallets y embarques":
+if modo == "📊 Tablero":
+    import mode_pallets
+    mode_pallets.render_tablero()
+elif modo == "🚚 Pallets y embarques":
     import mode_pallets
     mode_pallets.render()
 elif modo == "📝 Captura de monitoreos":
