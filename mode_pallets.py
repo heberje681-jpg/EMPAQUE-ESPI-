@@ -41,15 +41,56 @@ def render():
                     st.success("Datos restaurados.")
                     st.rerun()
 
-    sub = st.radio("Sección", ["👤 Productores", "🧊 Pallets", "🚚 Embarques"],
+    sub = st.radio("Sección", ["📊 Tablero", "👤 Productores", "🧊 Pallets", "🚚 Embarques"],
                     horizontal=True, label_visibility="collapsed")
 
-    if sub == "👤 Productores":
+    if sub == "📊 Tablero":
+        _render_tablero()
+    elif sub == "👤 Productores":
         _render_productores()
     elif sub == "🧊 Pallets":
         _render_pallets()
     else:
         _render_embarques()
+
+
+# ---------------------------------------------------------------------------
+# Tablero (dashboard de cuarto frío en tiempo real)
+# ---------------------------------------------------------------------------
+
+def _render_tablero():
+    st.subheader("🧊 Tablero de cuarto frío (tiempo real)")
+    todos_activos = db.listar_pallets()
+
+    conteo_estado = {estado: 0 for estado in db.ESTADOS_PALLET}
+    for p in todos_activos:
+        conteo_estado[p["estado"]] = conteo_estado.get(p["estado"], 0) + 1
+    cols_metricas = st.columns(len(db.ESTADOS_PALLET))
+    for col, estado in zip(cols_metricas, db.ESTADOS_PALLET):
+        col.metric(estado.title(), conteo_estado.get(estado, 0))
+
+    cA, cB = st.columns(2)
+    with cA:
+        st.caption("Pallets por calibre (todos los estados)")
+        if todos_activos:
+            st.bar_chart(pd.DataFrame(todos_activos)["calibre"].value_counts())
+        else:
+            st.caption("Sin pallets registrados todavía.")
+    with cB:
+        st.caption("Pallets por productor (todos los estados)")
+        if todos_activos:
+            st.bar_chart(pd.DataFrame(todos_activos)["productor_nombre"].value_counts())
+        else:
+            st.caption("Sin pallets registrados todavía.")
+
+    st.divider()
+    st.subheader("Embarques en curso")
+    embarques = [e for e in db.listar_embarques() if e["estado"] != "ENTREGADO"]
+    if embarques:
+        st.dataframe(pd.DataFrame(embarques)[["id", "fecha", "chofer", "placas", "destino", "estado"]],
+                     use_container_width=True, hide_index=True)
+    else:
+        st.caption("No hay embarques en curso en este momento.")
 
 
 # ---------------------------------------------------------------------------
@@ -95,45 +136,23 @@ def _selector_productor(label="Productor", key=None):
 def _render_pallets():
     st.subheader("Registrar pallet nuevo")
     productor_id = _selector_productor(key="pallet_productor")
-    if productor_id is None:
-        return
 
-    with st.form("form_pallet", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        numero = c1.number_input("# de pallet", min_value=0, step=1)
-        variedad = c2.text_input("Variedad", value="ATAULFO")
-        calibre = c3.selectbox("Calibre", options=db.CALIBRES)
-        c4, c5 = st.columns(2)
-        cajas_sugeridas = db.CALIBRE_CAJAS_SUGERIDAS.get(calibre, 225)
-        cajas = c4.number_input("Cajas", min_value=0, step=1, value=cajas_sugeridas,
-                                 help="Se sugiere según el calibre; ajústalo si es distinto (ej. doble línea).")
-        organico = c5.checkbox("Orgánico")
-        mixto_notas = st.text_input("Notas (ej. mixteado con otra variedad/productor)")
-        if st.form_submit_button("Registrar pallet"):
-            db.crear_pallet(numero, productor_id, variedad, calibre, cajas, organico, mixto_notas)
-            st.success(f"Pallet #{numero} registrado.")
-            st.rerun()
-
-    st.divider()
-    st.subheader("🧊 Tablero de cuarto frío (tiempo real)")
-    todos_activos = db.listar_pallets()
-    conteo_estado = {estado: 0 for estado in db.ESTADOS_PALLET}
-    for p in todos_activos:
-        conteo_estado[p["estado"]] = conteo_estado.get(p["estado"], 0) + 1
-    cols_metricas = st.columns(len(db.ESTADOS_PALLET))
-    for col, estado in zip(cols_metricas, db.ESTADOS_PALLET):
-        col.metric(estado.title(), conteo_estado.get(estado, 0))
-
-    if todos_activos:
-        cA, cB = st.columns(2)
-        with cA:
-            st.caption("Pallets por calibre (todos los estados)")
-            por_calibre = pd.DataFrame(todos_activos)["calibre"].value_counts()
-            st.bar_chart(por_calibre)
-        with cB:
-            st.caption("Pallets por productor (todos los estados)")
-            por_productor = pd.DataFrame(todos_activos)["productor_nombre"].value_counts()
-            st.bar_chart(por_productor)
+    if productor_id is not None:
+        with st.form("form_pallet", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            numero = c1.number_input("# de pallet", min_value=0, step=1)
+            variedad = c2.text_input("Variedad", value="ATAULFO")
+            calibre = c3.selectbox("Calibre", options=db.CALIBRES)
+            c4, c5 = st.columns(2)
+            cajas_sugeridas = db.CALIBRE_CAJAS_SUGERIDAS.get(calibre, 225)
+            cajas = c4.number_input("Cajas", min_value=0, step=1, value=cajas_sugeridas,
+                                     help="Se sugiere según el calibre; ajústalo si es distinto (ej. doble línea).")
+            organico = c5.checkbox("Orgánico")
+            mixto_notas = st.text_input("Notas (ej. mixteado con otra variedad/productor)")
+            if st.form_submit_button("Registrar pallet"):
+                db.crear_pallet(numero, productor_id, variedad, calibre, cajas, organico, mixto_notas)
+                st.success(f"Pallet #{numero} registrado.")
+                st.rerun()
 
     st.divider()
     st.subheader("Pallets activos (detalle y filtros)")
