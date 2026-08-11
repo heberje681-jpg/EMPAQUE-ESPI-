@@ -2,6 +2,9 @@ import streamlit as st
 
 st.set_page_config(page_title="ESPI — Pallets y conciliación", layout="wide")
 
+import styles
+styles.inject()
+
 with st.sidebar:
     st.header("Modo")
     modo = st.radio(
