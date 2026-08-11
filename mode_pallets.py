@@ -115,7 +115,28 @@ def _render_pallets():
             st.rerun()
 
     st.divider()
-    st.subheader("Pallets activos")
+    st.subheader("🧊 Tablero de cuarto frío (tiempo real)")
+    todos_activos = db.listar_pallets()
+    conteo_estado = {estado: 0 for estado in db.ESTADOS_PALLET}
+    for p in todos_activos:
+        conteo_estado[p["estado"]] = conteo_estado.get(p["estado"], 0) + 1
+    cols_metricas = st.columns(len(db.ESTADOS_PALLET))
+    for col, estado in zip(cols_metricas, db.ESTADOS_PALLET):
+        col.metric(estado.title(), conteo_estado.get(estado, 0))
+
+    if todos_activos:
+        cA, cB = st.columns(2)
+        with cA:
+            st.caption("Pallets por calibre (todos los estados)")
+            por_calibre = pd.DataFrame(todos_activos)["calibre"].value_counts()
+            st.bar_chart(por_calibre)
+        with cB:
+            st.caption("Pallets por productor (todos los estados)")
+            por_productor = pd.DataFrame(todos_activos)["productor_nombre"].value_counts()
+            st.bar_chart(por_productor)
+
+    st.divider()
+    st.subheader("Pallets activos (detalle y filtros)")
     c1, c2, c3 = st.columns(3)
     filtro_estado = c1.selectbox("Filtrar por estado", ["(todos)"] + db.ESTADOS_PALLET)
     filtro_prod = c2.selectbox("Filtrar por productor", ["(todos)"] +
@@ -221,6 +242,7 @@ def _render_embarques():
 
     st.divider()
     opciones = {e["id"]: f'#{e["id"]} — {e["fecha"]} — {e["destino"] or "sin destino"} — {e["estado"]}'
+                + (" ✅ llegó" if e.get("confirmacion_llegada") else "")
                 for e in embarques}
     default_id = st.session_state.get("embarque_activo", embarques[0]["id"])
     if default_id not in opciones:
@@ -272,6 +294,16 @@ def _render_embarques():
             st.success("Ya se marcó como enviado para este embarque.")
         elif st.button("Marcar aviso como enviado"):
             db.actualizar_embarque(eid, aviso_enviado=1)
+            st.rerun()
+
+    st.divider()
+    st.subheader("✅ Confirmación de llegada")
+    if e.get("confirmacion_llegada"):
+        st.success(f"Llegada confirmada el {e['fecha_llegada']}.")
+    else:
+        st.caption("Cuando el chofer o el cliente avisen que el camión ya llegó a su destino, regístralo aquí.")
+        if st.button("Confirmar llegada a destino"):
+            db.confirmar_llegada(eid)
             st.rerun()
 
     st.divider()
